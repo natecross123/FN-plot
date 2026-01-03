@@ -1,0 +1,222 @@
+package fnplot.syntax;
+
+import java_cup.runtime.*;
+import java.io.*;
+import java.util.*;
+
+/* Preliminaries to set up and use the scanner.  */
+parser code {:
+		FnPlotLexer lexer;
+
+		public FnPlotParser(FnPlotLexer l) {
+		    // As of CUP v0.11, need to pass Lexer to superclass
+		    super(l);
+		    lexer = l;
+		}
+
+                public FnPlotParser(Reader r) {
+                    this(new FnPlotLexer(r));
+                } 
+
+		public void report_error(String message, Object info) {
+		    System.err.println(message);
+		}
+
+		public void syntax_error(Symbol cur_token) {
+		    System.err.print("Line " + lexer.getLine() +
+				     " near char " + lexer.getChar() + ": ");
+		    report_error("Syntax error", cur_token);
+		    System.err.println ("Last token read is " +
+					 lexer.getText());
+		}
+	    :};
+
+init with {:
+	  :};
+
+scan with {:
+		try {
+		    return lexer.next_token();
+		} catch (java.io.IOException ioe) {
+		    System.out.println("Line " + lexer.getLine() + ", pos " +
+				       lexer.getChar() +
+				       ": Unrecognised token");
+		    System.out.println(ioe.getMessage());
+		    throw ioe;
+		}
+	  :};
+
+/* Terminals (tokens returned by the scanner). */
+// keywords
+terminal FUN, LET, IN;
+
+// special symbols
+terminal LPAREN, RPAREN, SEMI;
+terminal LBRACE, RBRACE, COMMA, EQUAL;
+
+// arithmetic operators
+terminal PLUS, MINUS, MUL, DIV, MOD, ASSIGN;
+
+// terminals with values
+terminal Integer INT;
+terminal String VAR;
+
+/* Non terminals */
+non terminal ArithProgram program;
+non terminal StmtSequence stmtList;
+non terminal Statement stmt;
+non terminal StmtDefinition definition;
+
+non terminal StmtSequence block;
+
+non terminal StmtFunDefn funDefn;
+non terminal ExpFunCall funCall;
+non terminal ArrayList<String> paramList;
+non terminal ArrayList<String> paramListE;
+non terminal ArrayList<Exp> argList;
+non terminal ArrayList<Exp> argListE;
+
+terminal IF, COLON, ELSE, END;
+terminal Cmp CMP;
+non terminal ExpIf ifExp;
+non terminal ExpComparison logicalExp;
+
+/** Terminals and non terminals for FnPlot extensions */
+terminal double REAL; 
+
+non terminal ExpLet letExp;
+non terminal ArrayList<Binding> bindings;
+non terminal ArrayList<Binding> bindingsAux;
+non terminal Binding binding;
+
+non terminal SpaceSpec1DForm linSpace;
+non terminal SpaceSpecForm spaceExp;
+
+/* End of FnPlot extensions */
+
+non terminal Exp expression;
+non terminal Exp term;
+non terminal Exp factor;
+non terminal empty;
+
+/* Grammar rules */
+
+program ::= stmtList:s {: RESULT = new ArithProgram(s); :};
+
+stmtList ::= stmtList:lst stmt:s {:
+		lst.add(s); 
+		RESULT = lst;
+		:} |
+	     stmt:s {:
+		RESULT = new StmtSequence(s);
+		:};
+
+stmt ::= definition:d {: RESULT = d; :} |
+         funDefn:fd {: RESULT = fd; :} |
+	 expression:e {: RESULT = new StmtExp(e); :} SEMI;
+
+block ::= LBRACE stmtList:stmts RBRACE {: RESULT = stmts; :};
+
+funDefn ::= FUN VAR:name LPAREN paramListE:params RPAREN EQUAL
+                expression:body SEMI {:
+		RESULT = new StmtFunDefn(name, params, new StmtExp(body));
+	    :}|
+	    FUN VAR:name LPAREN paramListE:params RPAREN
+	        block:body {:
+		RESULT = new StmtFunDefn(name, params, body);	
+	    :};
+
+funCall ::= VAR:fn LPAREN argListE:args RPAREN {:
+	      RESULT = new ExpFunCall(fn, args);
+	   :} ;
+
+paramList ::= paramList:lst COMMA VAR:p {:
+	       	lst.add(p);
+		RESULT = lst;
+	      :} |
+	      VAR:p {:
+		ArrayList<String> params = new ArrayList<>();
+		params.add(p);
+		RESULT = params;
+	      :};
+
+paramListE ::= paramList:lst {: RESULT = lst; :} |
+	       empty {: RESULT = new ArrayList<>(); :};
+
+argList ::= argList:lst COMMA expression:arg {:
+	        lst.add(arg);
+		RESULT = lst;
+	    :} |
+	    expression:arg {:
+	        ArrayList<Exp> lst = new ArrayList<>();
+		lst.add(arg);
+		RESULT = lst;
+	    :};
+
+argListE ::= argList:lst {: RESULT = lst; :} |
+	     empty {: RESULT = new ArrayList<>(); :};
+
+linSpace ::= /* Fill in these */;
+
+spaceExp ::= /* Fill in these */;
+
+definition ::= VAR:v ASSIGN expression:e SEMI {:
+		   RESULT = new StmtDefinition(v, e);
+		:};
+
+ifExp ::= IF logicalExp:pred COLON expression:consequent END {:
+      	     RESULT = new ExpIf(pred, consequent);
+          :} |
+	  IF logicalExp:pred COLON expression:consequent
+	     ELSE expression:alternative END {:
+	     RESULT = new ExpIf(pred, consequent, alternative);
+          :} ;
+
+logicalExp ::= expression:left EQUAL expression:right {:
+	          RESULT = new ExpComparison(Cmp.EQ, left, right);
+	       :} |
+	       expression:left CMP:cmp expression:right {:
+	          RESULT = new ExpComparison(cmp, left, right);
+	       :};
+letExp ::= LET bindings:bs IN LBRACE expression:body RBRACE {:
+			RESULT = new ExpLet(bs, body);
+           :};
+
+binding ::= VAR:v EQUAL expression:e {:
+		RESULT = new Binding(v, e);
+	    :};
+
+bindings ::= binding:b bindingsAux:bl {:
+		bl.add(0,b);
+		RESULT = bl;
+	     :} |
+		empty {: RESULT = new ArrayList<>(); :};
+
+bindingsAux ::= COMMA binding:b bindingsAux:bl {:
+		  bl.add(0,b);
+		  RESULT = bl;
+		:} |
+		empty {: RESULT = new ArrayList<>(); :};
+
+expression ::= 	expression:e PLUS term:t {:
+			RESULT = new ExpAdd(e, t); :} |
+		expression:e MINUS term:t {:
+			RESULT = new ExpSub(e, t); :} |
+		term:t {: RESULT = t; :};
+
+term ::= term:t MUL factor:f {:
+		RESULT = new ExpMul(t, f); :} |
+	 term:t DIV factor:f {:
+		RESULT = new ExpDiv(t, f); :} |
+	 term:t MOD factor:f {:
+		RESULT = new ExpMod(t, f); :} |
+	 factor:f {: RESULT = f; :};
+
+factor ::= INT:ilit {: RESULT = new ExpLit(ilit); :} |
+	   VAR:var {: RESULT = new ExpVar(var); :} |
+	   funCall:fc {: RESULT = fc; :} |
+           letExp: le {: RESULT = le; :} |
+	   ifExp:exp {: RESULT = exp; :} |
+	   LPAREN expression:e RPAREN {: RESULT = e; :}	;
+
+empty ::= ;

@@ -1,0 +1,2 @@
+w := 1;
+tabulate x * y + w for (x, y) in [2, 3, 5, 7], [1 .. 5 : 1];
