@@ -97,7 +97,20 @@ alphanum = {alpha}|{digit}
 <YYINITIAL>	">="	{return new Symbol(sym.CMP, Cmp.GE);}
 <YYINITIAL>	"!="	{return new Symbol(sym.CMP, Cmp.NE);}
 
+<YYINITIAL>  "["     {return new Symbol(sym.LBRACKET);}
+<YYINITIAL>  "]"     {return new Symbol(sym.RBRACKET);}
+<YYINITIAL>  ".."    {return new Symbol(sym.DOTDOT);}
+<YYINITIAL>  "plot"  {return new Symbol(sym.PLOT);}
+<YYINITIAL>  "tabulate" {return new Symbol(sym.TABULATE);}
+<YYINITIAL>  "for"   {return new Symbol(sym.FOR);}
+<YYINITIAL>  "clear" {return new Symbol(sym.CLEAR);}
 
+<YYINITIAL>    -?{digit}+\.{digit}+ {
+	       // REAL NUMBER - MUST COME BEFORE INTEGER
+	       return new Symbol(sym.REAL, 
+				 Double.parseDouble(yytext()));
+		}
+		
 <YYINITIAL>    -?{digit}+ {
 	       // INTEGER
 	       return new Symbol(sym.INT, 

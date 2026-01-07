@@ -49,17 +49,23 @@ scan with {:
 /* Terminals (tokens returned by the scanner). */
 // keywords
 terminal FUN, LET, IN;
+terminal PLOT, TABULATE, FOR, CLEAR;
 
 // special symbols
 terminal LPAREN, RPAREN, SEMI;
 terminal LBRACE, RBRACE, COMMA, EQUAL;
+terminal LBRACKET, RBRACKET, DOTDOT;
 
 // arithmetic operators
 terminal PLUS, MINUS, MUL, DIV, MOD, ASSIGN;
 
 // terminals with values
 terminal Integer INT;
+terminal Double REAL;
 terminal String VAR;
+
+terminal IF, COLON, ELSE, END;
+terminal Cmp CMP;
 
 /* Non terminals */
 non terminal ArithProgram program;
@@ -76,13 +82,8 @@ non terminal ArrayList<String> paramListE;
 non terminal ArrayList<Exp> argList;
 non terminal ArrayList<Exp> argListE;
 
-terminal IF, COLON, ELSE, END;
-terminal Cmp CMP;
 non terminal ExpIf ifExp;
 non terminal ExpComparison logicalExp;
-
-/** Terminals and non terminals for FnPlot extensions */
-terminal double REAL; 
 
 non terminal ExpLet letExp;
 non terminal ArrayList<Binding> bindings;
@@ -92,12 +93,18 @@ non terminal Binding binding;
 non terminal SpaceSpec1DForm linSpace;
 non terminal SpaceSpecForm spaceExp;
 
-/* End of FnPlot extensions */
+non terminal StmtPlot plotStmt;
+non terminal StmtClear clearStmt;
+non terminal StmtTabulate tabulateStmt;
 
 non terminal Exp expression;
 non terminal Exp term;
 non terminal Exp factor;
 non terminal empty;
+
+/* Precedence declarations */
+precedence left COMMA;
+precedence left MUL;
 
 /* Grammar rules */
 
@@ -113,6 +120,9 @@ stmtList ::= stmtList:lst stmt:s {:
 
 stmt ::= definition:d {: RESULT = d; :} |
          funDefn:fd {: RESULT = fd; :} |
+         plotStmt:ps {: RESULT = ps; :} |
+         tabulateStmt:ts {: RESULT = ts; :} |
+         clearStmt:cs {: RESULT = cs; :} |
 	 expression:e {: RESULT = new StmtExp(e); :} SEMI;
 
 block ::= LBRACE stmtList:stmts RBRACE {: RESULT = stmts; :};
@@ -156,9 +166,44 @@ argList ::= argList:lst COMMA expression:arg {:
 argListE ::= argList:lst {: RESULT = lst; :} |
 	     empty {: RESULT = new ArrayList<>(); :};
 
-linSpace ::= /* Fill in these */;
+/* Plot statement */
+plotStmt ::= PLOT expression:exp FOR VAR:v IN linSpace:range SEMI {:
+    RESULT = new StmtPlot(exp, v, range);
+:};
 
-spaceExp ::= /* Fill in these */;
+/* Clear statement */
+clearStmt ::= CLEAR SEMI {:
+    RESULT = new StmtClear();
+:};
+
+/* Tabulate statement */
+tabulateStmt ::= TABULATE expression:exp FOR LPAREN paramListE:vars RPAREN 
+                 IN spaceExp:space SEMI {:
+    RESULT = new StmtTabulate(exp, vars, space);
+:};
+
+/* 1D Space specifications */
+linSpace ::= LBRACKET argList:pts RBRACKET {:
+                RESULT = new SpaceSpecPoints(pts);
+             :} |
+             LBRACKET expression:lo DOTDOT expression:hi COLON expression:inc RBRACKET {:
+                RESULT = new SpaceSpecRangeAndInc(lo, hi, inc);
+             :} |
+             LBRACKET expression:lo DOTDOT expression:hi SEMI expression:count RBRACKET {:
+                RESULT = new SpaceSpecRangeAndCount(lo, hi, count);
+             :} |
+             LBRACKET expression:lo COLON expression:inc SEMI expression:count RBRACKET {:
+                RESULT = new SpaceSpecStartIncCount(lo, inc, count);
+             :};
+
+/* Multi-dimensional space specifications */
+spaceExp ::= linSpace:ls {: RESULT = ls; :} |
+             spaceExp:left COMMA spaceExp:right {:
+                RESULT = new SpaceSpecZip(left, right);
+             :} |
+             spaceExp:left MUL spaceExp:right {:
+                RESULT = new SpaceSpecProduct(left, right);
+             :};
 
 definition ::= VAR:v ASSIGN expression:e SEMI {:
 		   RESULT = new StmtDefinition(v, e);
@@ -178,6 +223,7 @@ logicalExp ::= expression:left EQUAL expression:right {:
 	       expression:left CMP:cmp expression:right {:
 	          RESULT = new ExpComparison(cmp, left, right);
 	       :};
+
 letExp ::= LET bindings:bs IN LBRACE expression:body RBRACE {:
 			RESULT = new ExpLet(bs, body);
            :};
@@ -213,10 +259,11 @@ term ::= term:t MUL factor:f {:
 	 factor:f {: RESULT = f; :};
 
 factor ::= INT:ilit {: RESULT = new ExpLit(ilit); :} |
+	   REAL:rlit {: RESULT = new ExpLit(rlit); :} |
 	   VAR:var {: RESULT = new ExpVar(var); :} |
 	   funCall:fc {: RESULT = fc; :} |
-           letExp: le {: RESULT = le; :} |
+           letExp:le {: RESULT = le; :} |
 	   ifExp:exp {: RESULT = exp; :} |
-	   LPAREN expression:e RPAREN {: RESULT = e; :}	;
+	   LPAREN expression:e RPAREN {: RESULT = e; :};
 
 empty ::= ;

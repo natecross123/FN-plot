@@ -3,3 +3,5 @@ hi := 5;
 step := 0.5;
 x := 3;
 plot x*y for y in [lo .. hi : 2*step];
+
+

@@ -15,6 +15,8 @@ import fnplot.syntax.ExpMod;
 import fnplot.syntax.ExpMul;
 import fnplot.syntax.ExpSub;
 import fnplot.syntax.ExpVar;
+import fnplot.syntax.SpaceSpec1DForm;    
+import fnplot.syntax.SpaceSpecForm; 
 import fnplot.syntax.Statement;
 import fnplot.syntax.StmtClear;
 import fnplot.syntax.StmtDefinition;
@@ -24,8 +26,12 @@ import fnplot.syntax.StmtPlot;
 import fnplot.syntax.StmtSequence;
 import fnplot.syntax.StmtTabulate;
 import fnplot.syntax.Visitor;
+import fnplot.sys.RuntimeFnPlotException;  
 import fnplot.sys.VisitException;
 import fnplot.values.Closure;
+import fnplot.values.PointkD;              
+import fnplot.values.PointSet1D;            
+import fnplot.values.PointSetkD;      
 import java.util.*;
 
 public class Evaluator implements Visitor<Environment<Double>, Double> {
@@ -174,12 +180,35 @@ public class Evaluator implements Visitor<Environment<Double>, Double> {
 	    return alternative.visit(this, env);
 	}
     }
-    
-    /* Methods to handle plot and tabulate */
+
     @Override
     public Double visitStmtPlot(StmtPlot plotStmt, Environment<Double> env) throws VisitException {
-        result = defaultValue;
-        // Fill in this body
+        Exp outputExp = plotStmt.getOutputExp();
+        String var = plotStmt.getVar();
+        SpaceSpec1DForm rangeSpec = plotStmt.getRange();
+
+        PointSet1D<Double> pointSet = rangeSpec.eval(ssEvaluator, env);
+
+         ArrayList<java.awt.geom.Point2D> points = new ArrayList<>();
+
+        for (Double inputVal : pointSet.iterValues()) {
+            // Create a new environment with the variable bound to the input value
+            Environment<Double> localEnv = new Environment<>(env);
+            localEnv.put(var, inputVal);
+            
+        // Evaluate the expression in this environment
+        Double outputVal = outputExp.visit(this, localEnv);
+        
+        // Add the (input, output) pair to our points list
+        points.add(new java.awt.geom.Point2D.Double(inputVal, outputVal));
+        
+        // Update result to be the last computed value
+        result = outputVal;
+        }
+        
+        // Send the points to the plotter
+        plotter.plot(points);
+        
         return result;
     }
     
@@ -191,14 +220,46 @@ public class Evaluator implements Visitor<Environment<Double>, Double> {
     }
     
     @Override
-    public Double visitStmtTabulate(StmtTabulate tabStmt, Environment<Double> env) 
-            throws VisitException {
-        result = defaultValue;
-        // Fill in this body
-        return result;
+   public Double visitStmtTabulate(StmtTabulate tabStmt, Environment<Double> env) 
+        throws VisitException {
+    Exp valueExp = tabStmt.getValueExp();
+    ArrayList<String> varList = tabStmt.getVarList();
+    SpaceSpecForm spaceSpec = tabStmt.getSpaceSpec();
+    
+    // Evaluate the space specification to get the point set
+    PointSetkD<Double> pointSet = spaceSpec.eval(ssEvaluator, env);
+    
+    result = defaultValue;
+    
+    // Iterate through each point in the space
+    for (PointkD<Double> point : pointSet) {
+        // Check that the dimension matches the number of variables
+        if (point.getDimension() != varList.size()) {
+            throw new RuntimeFnPlotException(
+                "Dimension mismatch: " + varList.size() + " variables but " +
+                point.getDimension() + "-dimensional space");
+        }
+        
+        // Create new environment with variables bound to point components
+        Environment<Double> localEnv = new Environment<>(env);
+        for (int i = 0; i < varList.size(); i++) {
+            localEnv.put(varList.get(i), point.get(i));
+        }
+        
+        // Evaluate the expression
+        result = valueExp.visit(this, localEnv);
+        
+        // Print the result in the required format
+        System.out.print("(");
+        for (int i = 0; i < point.getDimension(); i++) {
+            if (i > 0) System.out.print(", ");
+            System.out.printf("%.2f", point.get(i));
+        }
+        System.out.printf(") %.2f%n", result);
     }
-
-    /* End of methods to handle plot and tabulate */
+    
+    return result;
+}
     
     @Override
     public Double visitExpAdd(ExpAdd exp, Environment<Double> env)

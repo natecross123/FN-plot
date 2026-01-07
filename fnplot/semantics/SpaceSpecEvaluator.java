@@ -19,14 +19,17 @@
  */
 package fnplot.semantics;
 
+import fnplot.syntax.Exp;
 import fnplot.syntax.SpaceSpecZip;
 import fnplot.syntax.SpaceSpecPoints;
 import fnplot.syntax.SpaceSpecProduct;
 import fnplot.syntax.SpaceSpecRangeAndCount;
 import fnplot.syntax.SpaceSpecRangeAndInc;
+import fnplot.syntax.SpaceSpecStartIncCount;
 import fnplot.sys.VisitException;
 import fnplot.values.PointSet1D;
 import fnplot.values.PointSetkD;
+import java.util.ArrayList;
 
 /**
  *
@@ -43,7 +46,12 @@ public class SpaceSpecEvaluator {
     public PointSet1D<Double> evalPointsList(SpaceSpecPoints sspts, Environment<Double> state)
             throws VisitException {
         PointSet1D<Double> result = new PointSet1D<>();
-        /* Implement this */
+        ArrayList<Exp> pointExps = sspts.getPointExps();
+        
+        for (Exp exp : pointExps) {
+            Double value = exp.visit(expEval, state);
+            result.add(value);
+        }
         
         return result;
     }
@@ -51,7 +59,14 @@ public class SpaceSpecEvaluator {
     public PointSet1D<Double> evalRangeAndInc(SpaceSpecRangeAndInc ssri, Environment<Double> env) 
             throws VisitException {
         PointSet1D<Double> result = new PointSet1D<>();
-        /* Implement this */
+        
+        Double start = ssri.getStartExp().visit(expEval, env);
+        Double stop = ssri.getStopExp().visit(expEval, env);
+        Double inc = ssri.getIncExp().visit(expEval, env);
+        
+        for (double val = start; val < stop; val += inc) {
+            result.add(val);
+        }
         
         return result;
     }
@@ -59,20 +74,50 @@ public class SpaceSpecEvaluator {
     public PointSet1D<Double> evalRangeAndCount(SpaceSpecRangeAndCount ssrc, 
             Environment<Double> env) throws VisitException {
         PointSet1D<Double> result = new PointSet1D<>();
-        /* Implement this */
+        
+        Double start = ssrc.getStartExp().visit(expEval, env);
+        Double stop = ssrc.getStopExp().visit(expEval, env);
+        int count = ssrc.getCountExp().visit(expEval, env).intValue();
+        
+        if (count <= 0) return result;
+        
+        double inc = (stop - start) / count;
+        
+        for (int i = 0; i < count; i++) {
+            result.add(start + i * inc);
+        }
+        
+        return result;
+    }
+    
+    public PointSet1D<Double> evalStartIncCount(SpaceSpecStartIncCount ssic, 
+            Environment<Double> env) throws VisitException {
+        PointSet1D<Double> result = new PointSet1D<>();
+        
+        Double start = ssic.getStartExp().visit(expEval, env);
+        Double inc = ssic.getIncExp().visit(expEval, env);
+        int count = ssic.getCountExp().visit(expEval, env).intValue();
+        
+        for (int i = 0; i < count; i++) {
+            result.add(start + i * inc);
+        }
         
         return result;
     }
     
     public PointSetkD<Double> evalZipped(SpaceSpecZip ssz, 
-            Environment<Double> env) throws VisitException {        
-        /* Implement this */
-        return null;
-    }    
+            Environment<Double> env) throws VisitException {
+        PointSetkD<Double> left = ssz.getLeftForm().eval(this, env);
+        PointSetkD<Double> right = ssz.getRightForm().eval(this, env);
+        
+        return left.zip(right);
+    }
 
     public PointSetkD<Double> evalProduct(SpaceSpecProduct ssProd, 
             Environment<Double> env) throws VisitException {
-        /* Implement this */
-        return null;
+        PointSetkD<Double> left = ssProd.getLeftForm().eval(this, env);
+        PointSetkD<Double> right = ssProd.getRightForm().eval(this, env);
+        
+        return left.product(right);
     }
 }
